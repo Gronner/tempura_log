@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2025 Gronner <gronner@mailbox.org>
+#
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+name: "Integration Checks"
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  compliance-lint:
+    name: "Small compliance checks"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - name: Verify Conventional Commit compliance
+        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed #v6.2.1
+      - name: Verify REUSE compliance
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 #v6.0.0
+  pre-build-checks:
+    name: "Pre-build checks"
+    needs: [compliance-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - name: Setup toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c #v1.15.2
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Check Rust Errors
+        run: cargo check
+      - name: Check Code Formatting
+        uses: actions-rust-lang/rustfmt@559aa3035a47390ba96088dffa783b5d26da9326 #v1.1.1
+      - name: Check Code Formatting
+        run: cargo clippy
+  auditing:
+    name: "Audit CVE checks"
+    needs: [compliance-lint]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - name: Audit Rust Dependencies
+        uses: actions-rust-lang/audit@579aeab71c3eeeeae955a8e3c6136bfc93915987 #v0.21.2
+  building:
+    name: "Build library"
+    needs: [auditing, pre-build-checks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - name: Setup toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c #v1.15.2
+      - name: Build library
+        run: cargo build
+  unittest:
+    name: "Run unit tests"
+    needs: building
+    runs-on: ubuntu-latest
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - name: Execute unit tests
+        run: cargo tarpaulin --fail-under 95 --out xml
+      - name: Generate coverage report
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 #v5.5.1
+        with:
+          flags: unittests
+          fail_ci_if_error: true
