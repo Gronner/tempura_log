@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2025 Gronner <gronner@mailbox.org>
+#
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+[package]
+name = "tempura_log"
+version = "0.1.0"
+edition = "2024"
